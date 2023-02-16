@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+
+<!-- Mirrored from digitonaut.com/art/flying_car_blues/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:04 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='description' content=''/>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Flying Car Blues</title>
+
+<script src="shader-web-background.min.js"></script>
+<script type="x-shader/x-fragment" id="Image">
+precision highp float;
+uniform vec2  iResolution;
+uniform float iTime;
+
+// -------------------------------------------------------------------------------------------------- Shadertoy code
+#define time iTime
+#define rez iResolution
+//taxicab trig
+#define Pi (2.0*sqrt(2.0))
+float Cos(float a){return 2.0*abs(mod(a,2.0*Pi)-Pi)/Pi-1.0;}   
+float Sin(float a){return Cos(a-Pi/2.0);}   
+vec2 CosSin(float a){return vec2(Cos(a),Sin(a));}
+float Length(vec2 p){return abs(p.x)+abs(p.y);}
+vec3 taxi(float t){vec2 p=vec2(2.*Cos(t/2.),Sin(t));return vec3(p.x+p.y,0,p.x-p.y);}
+vec3 mcol=vec3(0.0);  
+float DE(in vec3 p){
+ vec3 z=p; 
+ z.xz = abs(mod(z.xz,6.)-3.);
+ z.xz=clamp(z.xz, -1.0, 1.0) *2.0-z.xz;
+ if(z.x>z.z)z.xz=z.zx;
+ float dg=z.y,t=sin((z.x+z.z)*3.)*.1,ds=length(z.xz+sin(p.zx)*.2)-.4+t;
+ float dt=dg-1.5+t+sin((p.x-p.z)*.3)*.5;
+ p.xz=abs(mod(p.xz+3.,12.)-6.)-3.;
+ z.x+=.5;z.z=fract(z.z)-.5;
+ float dc=max(length(z)-.15,abs(z.z)-0.09),n=6.;
+ for(int i=0;i<5;i++){
+   vec3 c=taxi(iTime+float(2*i));
+   float dw=length(p-c)-.15;
+   if(dw<.1){//refine
+     vec3 rt=cross(vec3(0,1,0),normalize(c-taxi(iTime+float(2*i)+.3)));
+     float w=abs(dot(p-c,rt))-0.09;
+     dw=max(dw,w);
+   }
+   if(dw<dc){dc=dw;n=float(i);}
+ }
+ dc=max(dc,p.y-0.125);
+ float d=min(min(dc,dg),max(ds*.7,dt));
+ if(mcol.x>0.0){
+   if(d==dc){
+     mcol+=step(0.,abs(p.y-0.09)-.02)*(vec3(0.25)+0.25*vec3(sin(n),sin(n+1.),sin(n+2.5)));
+   }else if(d!=dg){
+     p=abs(sin(p*vec3(40.,20.,40.)));
+     mcol+=mix(vec3(0),vec3(.5)+sin(z.xyz*3.)*0.5,pow(min(p.y,min(p.x,p.z)),.2));
+   }else {
+     mcol+=vec3(ds)*.2;
+   }
+ }
+ return d;
+}
+
+vec3 normal(vec3 p, float d){//from dr2
+  vec2 e=vec2(d,-d);vec4 v=vec4(DE(p+e.xxx),DE(p+e.xyy),DE(p+e.yxy),DE(p+e.yyx));
+  return normalize(2.*v.yzw+vec3(v.x-v.y-v.z-v.w));
+}
+float bounce=1.;
+vec3 sky(vec3 rd, vec3 L){
+  vec3 c= abs(rd)*.2+0.3*dot(rd,L)+0.3;
+  for(float i=0.;i<5.;i+=1.){
+    vec2 p=vec2(sin(i*.1+iTime),sin(i*.1+1.+iTime*.7));
+    c+=bounce*5.*vec3(0,1,0)*exp(-abs(dot(p,rd.xz))*1000.);
+  }
+  return clamp(c,0.,1.);
+}
+float rnd;
+void randomize(in vec2 p){rnd=fract(float(time)+sin(dot(p,vec2(13.3145,117.7391)))*42317.7654321);}
+
+float ShadAO(in vec3 ro, in vec3 rd,in float dL){
+ float t=0.01*rnd,s=1.0,d,mn=0.01;
+ for(int i=0;i<12;i++){
+  d=max(DE(ro+rd*t)*1.5,mn);
+  s=min(s,d/t+t*0.5);
+  t+=d;
+  if(d>dL)break;
+ }
+ return s;
+}
+vec3 scene(vec3 ro, vec3 rd){
+  float t=DE(ro)*rnd,d,pd,os,px=1./rez.y;
+  vec3 L=normalize(vec3(0.4,0.5,0.5)),C=vec3(0);
+  float refl=1.;
+  for(int j=0;j<4;j++){
+    mcol=vec3(0);d=1.0,pd=10.0,os=0.0; //estimated,prev distance, overstep
+    for(int i=0;i<30;i++){
+      d=DE(ro+rd*t);
+      if(d>os){  //we have NOT stepped over anything 
+        os=0.5*d*d/pd;//calc overstep based on ratio of this step to last 
+        t+=d+os; //add in the overstep 
+        pd=d; //save this step length for next calc 
+      }else{  //we MAY have stepped over something 
+        os*=0.5; //bisect overstep 
+        t-=os; //back up 
+        if(os>0.001)d=px*t*2.; //don't bail unless the overstep was small (and d of course) 
+        else t+=d+os;//we are going to bail so add in this last distance 
+      }
+      if(t>70.0 || d<px*t)break;
+    }
+    if(d<px*t && t<70.){
+      mcol.x=0.001;
+      vec3 so=ro+rd*t;
+      vec3 N=normal(so,d);
+      mcol*=.25;
+      refl*=mcol.x;
+      vec3 scol=mcol;mcol.x=0.;
+      float dif=0.75+0.25*dot(N,L);
+      float vis=clamp(dot(N,-rd),0.05,1.0);
+      float fr=pow(1.-vis,5.0);
+      float shad=0.5+0.5*ShadAO(so,L,1.);
+      bounce*=bounce*bounce*bounce+8.;
+      scol=(scol*dif+fr*sky(reflect(rd,N),L))*shad;
+      C=clamp(C+scol*refl,0.,1.);
+      ro+=rd*(t-px*t);rd=reflect(rd,N);t=px*t*2.;
+    }
+  }
+  return C+sky(rd,L)*refl;
+}
+vec3 path(float t){t*=.2;return vec3(2.75*sin(t),.75+sin(t*1.3)*.1,2.*cos(t)-.2);}
+mat3 lookat(vec3 fw){vec3 up=vec3(0.0,1.0,0.0),rt=-normalize(cross(fw,up));return mat3(rt,normalize(cross(rt,fw)),fw);}
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+ randomize(fragCoord);
+ vec3 ro=path(iTime),fw=normalize(-vec3(0,0.001,0.)-ro);
+ //vec3 ro=vec3(1,2,0),fw=vec3(0,0,1);
+ vec3 rd=lookat(fw)*normalize(vec3((iResolution.xy-2.0*fragCoord)/iResolution.y,3.0));
+ fragColor=vec4(scene(ro,rd),1.0);
+}
+// -------------------------------------------------------------------------------------------------- End of Shadertoy code
+
+void main() {
+	mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+</script>
+<script>
+shaderWebBackground.shade({
+	shaders: {
+		Image: {
+			uniforms: {
+				iResolution: (gl, loc, ctx) => gl.uniform2f(loc, ctx.width, ctx.height),
+				iTime: (gl, loc) => gl.uniform1f(loc, performance.now() / 1000)
+			}
+		}
+	}
+});
+</script>
+</head>
+<body>
+</body>
+
+<!-- Mirrored from digitonaut.com/art/flying_car_blues/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:04 GMT -->
+</html>

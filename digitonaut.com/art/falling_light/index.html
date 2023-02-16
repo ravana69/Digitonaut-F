@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" >
+
+<!-- Mirrored from digitonaut.com/art/falling_light/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 09:59:12 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Falling Light</title>
+
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<script id="fs" type="x-shader/x-fragment">
+  precision mediump float;
+  uniform float time;
+  uniform vec2  mouse;
+  uniform vec2  resolution;
+  // window ratio
+  float ratio = resolution.x / resolution.y; 
+  float PI = 3.1415926;
+  
+  void main(void) {
+    // center center
+    vec2 p = vec2(gl_FragCoord.xy * 2.0 - resolution) / min(resolution.x, resolution.y);
+    // left bottom
+    //vec2 p = gl_FragCoord.xy / resolution.xy;
+    // from here
+    float l = length(p);
+    vec3 c = vec3(l, abs(sin(time) * 1.0 - p.x), abs(cos(time) * 1.0 - p.y));
+    float destC = 0.0;
+    for (float i = 1.0; i < 8.0; i++) {
+      destC += abs(sin(time / i) * 0.05) / length(vec2(sin(p.y + time * i) * 0.6, p.y) - p);
+    }
+    gl_FragColor = vec4(c * destC, 1.0);
+  }
+</script>
+
+<script id="vs" type="x-shader/x-vertex">
+  attribute vec3 position;
+
+  void main(void){
+    gl_Position = vec4(position, 1.0);
+  }
+</script>
+<!-- partial -->
+  <script  src="script.js"></script>
+
+</body>
+
+<!-- Mirrored from digitonaut.com/art/falling_light/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 09:59:13 GMT -->
+</html>

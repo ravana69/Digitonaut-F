@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Mirrored from digitonaut.com/art/fabric_sphere/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 09:59:08 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Fabric Sphere</title>
+
+<link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body>
+
+<script id="vs" type="not-js">
+void main()	{
+  gl_Position = vec4( position, 1.0 );
+}
+</script>
+<script id="fs" type="not-js">
+precision mediump float;
+
+// -------------------------------------------- code from https://glslsandbox.com/ ------------------
+
+/*
+ * Original shader from: https://www.shadertoy.com/view/Wdjfzh
+ */
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// glslsandbox uniforms
+uniform float time;
+uniform vec2 resolution;
+
+// shadertoy emulation
+#define iTime time
+#define iResolution resolution
+
+// --------[ Original ShaderToy begins here ]---------- //
+#define MAX_STEPS 100
+#define MAX_DIST 500.
+#define SURF_DIST 0.05
+
+const float rep = 0.5; //change to increase the number of threads on the sphere
+
+float sdCylinderYZ( vec3 p, vec3 c )
+{
+    return length(p.yz-c.xy)-c.z;
+}
+
+float sdCylinderXY( vec3 p, vec3 c)
+{
+    return length(p.xy-c.xy)-c.z;
+}
+
+float twistX(vec3 p, float offsetZ, float offsetY) {
+    //twisting coordinates
+    const float k = 1.0; 
+    vec3 q = vec3(p.x, p.y-offsetY, p.z-offsetZ);
+    float c = cos(k*q.x);
+    float s = sin(k*q.x);
+    mat2 m = mat2(c,-s,s,c);
+    q = vec3(q.x, m*q.yz);
+
+    //adding ridges
+    float dist = 0.1 * (0.3*sin(16.0*atan( q.z, q.y )));
+    return dist;
+}
+
+float twistZ(vec3 p, float offsetX, float offsetY) {
+    //twisting coordinates
+    const float k = 1.0; 
+    vec3 q = vec3(p.x-offsetX, p.y-offsetY, p.z);
+    float c = cos(k*q.z);
+    float s = sin(k*q.z);
+    mat2 m = mat2(c,-s,s,c);
+    q = vec3(m*q.xy, q.z);
+
+    //adding ridges
+    float dist = 0.1 * (0.3*sin(16.0*atan( q.x, q.y )));
+    return dist;
+}
+
+vec3 wrapSphere(vec3 p, vec3 s, float r) {
+    vec3 n = normalize(p-s);
+    float nx = r * acos( dot(normalize(vec3(n.x, 0, n.z)), vec3(0,0,1)) )*rep;
+    float nz = r * acos( dot(n, vec3(0,1,0)) )*rep;
+    vec3 newP = vec3(nx, (length(p-s)-r)*rep, nz);
+    return newP;
+}
+
+mat2 rotate(float a) {
+    float s = sin(a);
+    float c = cos(a);
+    return mat2(c, -s, s, c);
+}
+
+float getDist(vec3 p) {
+    
+    //Defining objects and distances to them
+
+    //rotation
+    p.z -= 60.;
+    p.xz *= rotate(iTime*0.1);
+    p.z += 60.;
+
+    vec3 sDist = wrapSphere(p, vec3(0, 0, 60), 30.);
+    vec3 repDist = vec3(mod(sDist.x, 3.14), sDist.y, mod(sDist.z, 5.));
+
+    float dst = sin(0.1*(iTime*25.+p.y)) *rep;
+
+    float rad1 = twistX(repDist, 2.0, (0.15 - sin(sDist.x + 1.7) + dst));
+    float rad2 = twistX(repDist, 4.0, (0.15 - sin(sDist.x + 4.84) + dst));
+    float rad3 = twistZ(repDist, 0.0, 0.0 + dst);
+    float rad4 = twistZ(repDist, 3.14, 0.0 + dst);
+
+    float thread1 = sdCylinderYZ(repDist, vec3(0.15 - sin(sDist.x + 1.7)+dst, 2., 0.5 - rad1));
+    float thread2 = sdCylinderYZ(repDist, vec3(0.15 - sin(sDist.x + 4.84)+dst, 4., 0.5 - rad2));
+    float thread3 = sdCylinderXY(repDist, vec3(0, 0.15+dst, 0.5-rad3));
+    float thread4 = sdCylinderXY(repDist, vec3(3.14, 0.15+dst, 0.5-rad4));
+
+    float threads = min(thread1, min(thread2, min(thread3, thread4)));
+    
+    //float plane = p.y+2.;
+
+    float d = threads/rep;
+    return d;
+}
+
+float rayMarch(vec3 ro, vec3 rd) {
+    float dO = 0.;
+    
+    for(int i = 0; i < MAX_STEPS; i++) {
+    	vec3 p = ro + rd*dO;
+        float dS = getDist(p);
+        dO += dS;
+        if(dO > MAX_DIST || abs(dS) < SURF_DIST) break;
+    }
+    
+    return dO;
+}
+
+vec3 getNormal(vec3 p) {
+    float d = getDist(p);
+    vec2 e = vec2(0.1, 0);
+
+    vec3 n = d - vec3(
+        getDist(p-e.xyy),
+        getDist(p-e.yxy),
+        getDist(p-e.yyx)
+    );
+
+    return normalize(n);
+}
+
+vec3 skyColor( in vec3 ro, in vec3 rd ) {
+    vec3 col = vec3(0.3,0.4,0.5)*0.9 - 0.275*rd.y;
+    
+    return col;
+}
+
+float ambientOcclusion(vec3 p, vec3 n) {
+    float step = 0.1;
+    float ao = 0.0;
+    const int iter = 3;
+    float intensity = 0.3;
+    float dist;
+    for(int i = 1; i <= iter; i++) {
+        dist = step * float(i);
+        ao += max(0.0, (dist - getDist(p + n * dist)) / dist);
+    }
+    return 1.0 - ao * intensity;
+}
+
+float getLight(vec3 p, vec3 lightPos) {
+
+    vec3 l = normalize(lightPos - p);
+    vec3 n = getNormal(p);
+
+    float dif = clamp(dot(n, l), 0., 1.);
+
+    //shadow
+    float d = rayMarch(p+n * SURF_DIST * 2. , l);
+    if(d<length(lightPos-p)) dif *= .1;
+
+    //ao
+    dif *= ambientOcclusion(p, n);
+
+    return dif;
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    vec2 uv = ((gl_FragCoord.xy-.5*iResolution.xy)/iResolution.y) * 2.0;
+    vec3 col = vec3(0);
+    
+    //Camera
+    vec3 rOrigin = vec3(0., 0., 10.);
+    vec3 rDirection = normalize(vec3(uv.x, uv.y, 1));
+    
+    float dist = rayMarch(rOrigin, rDirection);
+    vec3 p = rOrigin + rDirection * dist;
+    float dif = getLight(p, vec3(75, 20, 0));
+    float amb = getLight(p, vec3(-75, 20, 0));
+    
+    col = skyColor(rOrigin, rDirection);
+    if(dist < 100.) {
+        col = vec3(1.,0.95,0.85)*dif + vec3(0.3,0.4,0.5)*0.5*amb;
+    }
+    fragColor = vec4(col, 1.0);
+}
+// --------[ Original ShaderToy ends here ]---------- //
+
+void main(void)
+{
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+
+</script>
+<script src="three.min.js"></script>
+<script src="main.js"></script>
+
+</body>
+
+<!-- Mirrored from digitonaut.com/art/fabric_sphere/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 09:59:12 GMT -->
+</html>

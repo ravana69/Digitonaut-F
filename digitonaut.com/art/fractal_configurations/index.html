@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Mirrored from digitonaut.com/art/fractal_configurations/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:19 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Fractal Configurations</title>
+
+<link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body>
+
+<script id="vs" type="not-js">
+void main()	{
+  gl_Position = vec4( position, 1.0 );
+}
+</script>
+<script id="fs" type="not-js">
+precision mediump float;
+
+// -------------------------------------------- code from https://glslsandbox.com/ ------------------
+
+// from: https://www.shadertoy.com/view/WlBcWc
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// glslsandbox uniforms
+uniform float time;
+uniform vec2 resolution;
+
+// shadertoy emulation
+#define iTime time
+#define iResolution resolution
+
+// shadertoy code
+
+/*
+	fractal configurations
+	202 stb
+	free code is free
+
+	Update: removed vestiges from previous code, cleaned up some other things.
+*/
+
+#define PI 3.14159265
+#define RPT(a) vec2(sin(a), cos(a))
+#define T .33 * iTime
+
+vec2 cInvMir(vec2 p, vec2 o, float r) {
+    return length(p-o)<r ? (p-o) * r * r / dot(p-o, p-o) + o : p;
+}
+
+vec3 map(vec2 p) {
+    return
+        .5 + .5 * vec3(
+            cos(dot(p, RPT(T))),
+            cos(dot(p, RPT(T+PI/3.))),
+            cos(dot(p, RPT(T-PI/3.)))
+       );
+}
+
+// hash without sine
+// https://www.shadertoy.com/view/4djSRW
+#define MOD3 vec3(443.8975, 397.2973, 491.1871) // uv range
+vec2 hash22(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * MOD3);
+    p3 += dot(p3, p3.yzx+19.19);
+    return fract(vec2((p3.x + p3.y)*p3.z, (p3.x+p3.z)*p3.y));
+}
+
+void mainImage(out vec4 fo, in vec2 fc) {
+	vec2 res = iResolution.xy;
+	vec2 p = .5 * (fc-res/2.) / res.y;
+	
+    float ball = 1. - dot(p, p);
+    p /= ball;
+    p += RPT(.77*T);
+    
+    // fractal stuff
+	for(float i=0.; i<32.; i++) {
+    	vec2 h = mix( hash22(vec2(i, floor(T))), hash22(vec2(i, floor(T+1.))), pow(smoothstep(0., 1., fract(T)), 8.));
+        p = cInvMir(.8*p, .5-h, .37);
+	}
+    
+	fo = vec4((ball*4.7-3.3) * (map(p*3.)-length(p)/4.), 1.);
+}
+
+// end shadertoy code
+
+void main(void)
+{
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+// -------------------------------------------------------------------------------------------------------------------
+
+</script>
+<script src="three.min.js"></script>
+<script src="main.js"></script>
+
+</body>
+
+<!-- Mirrored from digitonaut.com/art/fractal_configurations/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:28 GMT -->
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Mirrored from digitonaut.com/art/fiddler/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 09:59:18 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Fiddler</title>
+
+<link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body>
+
+<script id="vs" type="not-js">
+void main()	{
+  gl_Position = vec4( position, 1.0 );
+}
+</script>
+<script id="fs" type="not-js">
+precision mediump float;
+
+// -------------------------------------------- code from https://glslsandbox.com/ ------------------
+
+// fiddler
+#ifdef GL_ES
+precision mediump float;
+#endif
+//+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+#define SIN_ITER 3
+
+float f(vec3 p)
+{       p.y +=.9;
+	p.x += time;
+	for (int i=0;i<SIN_ITER;i++)
+	{
+		p = sin(p*0.91+0.17+cos(time*0.123)*0.1);
+	}
+	return length(p) - 1.0/float(SIN_ITER);
+}
+
+void main( void ) {
+
+	vec2 pos = (gl_FragCoord.xy) / max(resolution.x, resolution.y);
+
+	vec3 p = vec3(pos, -2.0);
+	for (int i=0;i<28;i++)
+	{
+		p += f(p)*vec3(pos, 0.5+sin(time*0.1));
+	}
+
+	gl_FragColor = vec4(1.-abs(p-4.*vec3(pos, 1.))/5., 1.);
+
+}
+// -------------------------------------------------------------------------------------------------------------------
+
+</script>
+<script src="three.min.js"></script>
+<script src="main.js"></script>
+
+</body>
+
+<!-- Mirrored from digitonaut.com/art/fiddler/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 09:59:21 GMT -->
+</html>

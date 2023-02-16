@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+
+<!-- Mirrored from digitonaut.com/art/following_a_shape/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:10 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Following A Shape</title>
+
+<script src="shader-web-background.min.js"></script>
+<script type="x-shader/x-fragment" id="Image">
+precision highp float;
+uniform vec2  iResolution;
+uniform float iTime;
+
+// -------------------------------------------------------------------------------------------------- Shadertoy code
+// @lsdlive
+
+float dt =0.;
+vec2 path(float t) {
+	float a = sin(t*.2 + 1.5), b = sin(t*.2);
+	return vec2(a*2., a*b);
+}
+
+mat2 r2d(float a) {
+	float c = cos(a), s = sin(a);
+	return mat2(c, s, -s, c);
+}
+
+void amod(inout vec2 p, float m) {
+	float a = mod(atan(p.x, p.y) - m*.5, m) - m*.5;
+	p = vec2(cos(a), sin(a)) * length(p);
+}
+
+void mo(inout vec2 p, vec2 d) {
+	p.y = abs(p.y) - d.x;
+	p.x = abs(p.x) - d.y;
+	if (p.y > p.x) p.xy = p.yx;
+}
+
+float sc(vec3 p, float s) {
+	p = abs(p);
+	p = max(p, p.yzx);
+	return min(p.x, min(p.y, p.z)) - s;
+}
+
+float od(vec3 p, float s) {
+	return dot((p),normalize(sign(p)))-s;
+}
+
+float rep(float p, float m) {
+	return mod(p-m*.5, m) - m*.5;
+}
+
+float g = 0.;
+float id=0.;
+float de(vec3 p) {
+    p.xy -= path(p.z);
+    
+   // float s1 = length(p-vec3(0, 0, 2.+dt+sin(iTime))) -.2 - sin(iTime)*.1;
+    vec3 q = p;
+    q -= vec3(0, 0, 2.+dt+sin(iTime));
+    q.xz*=r2d(iTime);
+    q.xy*=r2d(iTime);
+    float s1 = od(q, .2- sin(iTime)*.1);
+    
+    q = p;
+    q.xy*=r2d(q.z*.1);
+    amod(q.xy, 4./6.28);
+    q.x = abs(q.x) - 3.;
+    float cyl = length(q.xy) - .3;
+    
+    
+    p.xy *= r2d(iTime*.4);
+    
+    //p.y += 2.;
+    
+    //p.xy *= r2d(p.z*.4);
+    
+    
+    amod(p.xy, 12./6.28);
+    mo(p.xy, vec2(2, 2.));
+    //mo(p.zy, vec2(.04, .7));
+    
+    p.xy *= r2d(p.z*.2);
+    
+    p.z = rep(p.z, 1.);
+    
+    
+    amod(p.xy, .785);
+    
+    //p.x = abs(p.x) - 1.;
+	mo(p.xy, vec2(.8, .4));
+    
+    float sc2 = sc(p, .5);
+    
+    p.xy *= r2d(3.14*.25);
+    
+    float d = sc(p, .3);
+    d = max(d, -sc2);
+    d = min(d, s1);
+    if(d<cyl) {
+        id = 1.;
+        //d= d;
+    }else {
+        id = 2.;
+       // d= cyl;
+    }
+	g += .01 / (.02 + d*d);
+	return d;
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord)
+{
+	vec2 uv = fragCoord / iResolution.xy - .5;
+	uv.x *= iResolution.x / iResolution.y;
+
+	dt = iTime * 6.;
+	vec3 ro = vec3(0, 0, -3. + dt);
+	vec3 ta = vec3(0, 0, dt);
+
+	ro.xy += path(ro.z);
+	ta.xy += path(ta.z);
+
+	vec3 fwd = normalize(ta - ro);
+	vec3 left = cross(vec3(0, 1, 0), fwd);
+	vec3 up = cross(fwd, left);
+
+	vec3 rd = normalize(fwd + left*uv.x + up*uv.y);
+
+	vec3 p;
+	float ri, t = 0.;
+	for (float i = 0.; i < 1.; i += .01) {
+		ri = i;
+		p = ro + rd*t;
+		float d = de(p);
+		if (d < .001) break;
+		t += d*.3;
+	}
+	vec3 bg = vec3(.2, .1, .2);
+	vec3 col = mix(vec3(1., .0, .0), bg, uv.x+ri);
+    /*if(id == 2.)*/ col.g += sin(p.z*.1)*.4; 
+       // col = mix(vec3(.3, .1+sin(p.z)*.3, .2), bg, ri);
+	col += g*.03;
+	col = mix(col, bg, 1. - exp(-.01*t*t));
+
+	fragColor = vec4(col, 1.0);
+}
+// -------------------------------------------------------------------------------------------------- End of Shadertoy code
+
+void main() {
+	mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+</script>
+<script>
+shaderWebBackground.shade({
+	shaders: {
+		Image: {
+			uniforms: {
+				iResolution: (gl, loc, ctx) => gl.uniform2f(loc, ctx.width, ctx.height),
+				iTime: (gl, loc) => gl.uniform1f(loc, performance.now() / 1000)
+			}
+		}
+	}
+});
+</script>
+</head>
+<body>
+</body>
+
+<!-- Mirrored from digitonaut.com/art/following_a_shape/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:11 GMT -->
+</html>

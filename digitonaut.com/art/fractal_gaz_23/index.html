@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Mirrored from digitonaut.com/art/fractal_gaz_23/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:28 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Fractal Gaz 23</title>
+
+<link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body>
+
+<script id="vs" type="not-js">
+void main()	{
+  gl_Position = vec4( position, 1.0 );
+}
+</script>
+<script id="fs" type="not-js">
+precision mediump float;
+
+// -------------------------------------------- code from https://glslsandbox.com/ ------------------
+
+/*
+ * Original shader from: https://www.shadertoy.com/view/ttdfz2
+ */
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// glslsandbox uniforms
+uniform float time;
+uniform vec2 resolution;
+
+// shadertoy emulation
+#define iTime time
+#define iResolution vec3(resolution,1.)
+
+// --------[ Original ShaderToy begins here ]---------- //
+#define R(p,a,r)mix(a*dot(p,a),p,cos(r))+sin(r)*cross(p,a)
+#define H(h)cos(h*6.3+vec3(0,23,21))*.5+.5
+void mainImage(out vec4 O, vec2 C)
+{
+    O=vec4(0);
+    vec3 r=iResolution,p;
+    float g=0.,e=0.,s=0.;
+    for(float i=0.;i<=99.;++i)
+    {
+        p=g*vec3((C-.5*r.xy)/r.y,1);
+        p.z-=1.;
+        p=R(p,normalize(vec3(1,3,3)),iTime*.2);
+        s=3.;
+        for(int j=0;j<=5;++j)
+            s*=e=1./min(dot(p,p),1.),
+            p=abs(p)*e-1.5;
+        g+=e=length(p.xy)/s;
+        (e<.001)?O.xyz+=mix(r/r,H(g),.6)*.8/i:p;
+    }
+}
+
+// --------[ Original ShaderToy ends here ]---------- //
+
+void main(void)
+{
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+    gl_FragColor.a = 1.;
+}
+// -------------------------------------------------------------------------------------------------------------------
+
+</script>
+<script src="three.min.js"></script>
+<script src="main.js"></script>
+
+</body>
+
+<!-- Mirrored from digitonaut.com/art/fractal_gaz_23/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:35 GMT -->
+</html>

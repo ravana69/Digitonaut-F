@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" >
+
+<!-- Mirrored from digitonaut.com/art/fractal_planet/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:49 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Fractal Planet</title>
+
+  <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<div id="container"></div>
+  
+  <script type="x-shader/x-vertex" id="vertexShader">
+  varying vec2 vUv;
+
+	void main() {
+
+		vUv = uv;
+		gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+	}
+  </script>
+
+  <script type="x-shader/x-vertex" id="fragmentShader">
+  varying vec2 vUv;
+	uniform float u_time;
+
+	float julia(vec2 z, vec2 c) {
+		for(float i = 0.0; i < 1e2; i++) {
+			float xx = z.x*z.x, yy = z.y*z.y, zz = xx + yy;
+			if (zz > 10.0){return 100.0;}
+			//if(zz > 10.0) { return i - log2(log2(zz)) + 4.0;}
+			//if (zz>200.0) { return 200.0 ;} 
+			//if (zz>150.0) { return 150.0 ;} 
+			float re = c.x*z.x + c.y*z.y + xx*xx - yy*yy ;
+			float im = c.y*z.x - c.x*z.y + 2.0*z.x*z.y*zz ;
+			z = vec2(re, im)/zz;
+		}
+		return 0.0 ;
+	}
+
+	void main() {
+
+		float pi = 3.14159265359 ;
+		float elevation = (vUv.y-0.5)*pi ;
+		float azimuth = vUv.x*2.0*pi ;
+		float Z = sin(elevation) ;
+		float cosel = cos(elevation) ; 
+		float X = cosel*cos(azimuth) ;
+		float Y = cosel*sin(azimuth) ;
+		vec2 coord = vec2(X/(1.-Z),Y/(1.-Z)) ;
+
+		// float tick = pi/20.0 ;
+		// vec3 color = vec3( vUv, 0. ) ;
+		// if (mod(elevation,tick)<.01){
+		// 	color = vec3(0.,0.,0.) ;
+		// }
+		// if (mod(azimuth,tick)<.01){
+		// 	color = vec3(0.,0.,0.) ;
+		// }
+		// if (mod(coord.x,1.0)<0.1){
+		// 	color = vec3(1.0,0.,0.) ;
+		// }
+		// if (mod(coord.y,1.0)<0.1){
+		// 	color = vec3(1.0,0.,0.) ;
+		// }
+		// gl_FragColor = vec4( color, 1. );
+
+		coord = sqrt(0.1)*coord ;
+		vec2 c = vec2(-0.01, -0.1) ;
+		float cycle = mod(u_time/1000.,2.*pi) ;
+		c = c + vec2(cos(cycle),sin(cycle))*.01 ;
+		float m = julia(coord, c);
+		vec3 rgb = 0.5 + 0.5*cos(3.0 + 0.15*m + vec3(0.0, 0.6, 2.));
+		gl_FragColor = vec4(rgb, 1.0);
+		// if (m==100.0 ){
+		// 	gl_FragColor = vec4(rgb, 0.3) ;
+		// } else {
+		// 	gl_FragColor = vec4(1.,1.,1.,1.) ;
+		// }
+
+	}
+</script>
+<script src='../../../cdnjs.cloudflare.com/ajax/libs/three.js/92/three.min.js'></script>
+<script src='OrbitControls.js'></script>
+<script  src="script.js"></script>
+</body>
+
+<!-- Mirrored from digitonaut.com/art/fractal_planet/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:51 GMT -->
+</html>

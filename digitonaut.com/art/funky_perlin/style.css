@@ -1,0 +1,46 @@
+@import url("https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700");
+html, body {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  margin: 0px;
+  padding: 0px;
+  overflow: hidden;
+  background: #833ab4;
+  /* fallback for old browsers */
+  background: -webkit-linear-gradient(to right, #fcb045, #fd1d1d, #833ab4);
+  /* Chrome 10-25, Safari 5.1-6 */
+  background: linear-gradient(to right, #fcb045, #fd1d1d, #833ab4);
+  /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
+}
+
+canvas {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  z-index: 0;
+}
+
+#welcome {
+  position: relative;
+  z-index: 1;
+  margin: auto 0;
+  margin-left: 15vw;
+}
+#welcome h1 {
+  color: #FFF;
+  font-weight: bold;
+  font-family: "Open Sans", sans-serif;
+  font-size: 6vw;
+}
+#welcome p {
+  color: #FFF;
+  font-weight: normal;
+  font-family: "Open Sans", sans-serif;
+  font-size: 11pt;
+  width: 100%;
+  max-width: 37vw;
+  padding: 2.5vw;
+  line-height: 1.5;
+  padding-bottom: 0px;
+}

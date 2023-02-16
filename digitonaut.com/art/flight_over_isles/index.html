@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Mirrored from digitonaut.com/art/flight_over_isles/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 09:59:38 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Flight Over Isles</title>
+
+<link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body>
+
+<script id="vs" type="not-js">
+void main()	{
+  gl_Position = vec4( position, 1.0 );
+}
+</script>
+<script id="fs" type="not-js">
+precision mediump float;
+
+// -------------------------------------------- code from https://glslsandbox.com/ ------------------
+
+/*
+ * Original shader from: https://www.shadertoy.com/view/wtfyzf
+ */
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// glslsandbox uniforms
+uniform float time;
+uniform vec2 resolution;
+
+// shadertoy emulation
+#define iTime time
+#define iResolution resolution
+
+// --------[ Original ShaderToy begins here ]---------- //
+// feel free to reuse
+
+mat2 rot2d(float a) {return mat2(cos(a),sin(a),-sin(a),cos(a));} // Angle => 2D rotation matrix
+
+float terrain_height(vec2 position) { // https://www.iquilezles.org/www/articles/fbm/fbm.htm
+  float height=0., amplitude=.8, n;
+  for(int i = 0; i < 20; i++) { // Sum up 20 layers
+    n = sin(position.x) * cos(position.y); n = n * n * n; // Simple base pattern, no noise
+    height += n * amplitude; // Accumulate value at current amplitude
+    position *= rot2d(float(i*i)); // Rotate (phase-shift?) by a hash of the current iteration
+    position *= 1.4; // Scale (increase frequency by ~1/2 an octave)
+    amplitude *= .66; // Reduce amplitude
+  }
+  return height;
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+  float time = iTime*.1;
+  vec2 uv = (fragCoord.xy * 2. - iResolution.xy) / min(iResolution.x,iResolution.y);
+  vec3 p, water_tint = vec3(1), ray_origin = vec3(-cos(time*.5)*4.,1.,time), // Camera position
+       ray_direction = normalize(vec3(uv.x, uv.y - .7 + cos(time) * .5, 1.7));
+  ray_direction.xy *= rot2d(sin(time*.5)*.5); // Camera orientation and field of view
+  float distance = 0., ray_length = 0.;
+  for(int i = 0; i < 75; i++) { // Raymarching loop
+    p = ray_origin + ray_direction * ray_length; // Get current ray position
+    if(distance<.1 && p.y<0.) { // If we're close to the surface check p.y for a water hit
+      ray_origin.y = -ray_origin.y; ray_direction.y = -ray_direction.y; // Reflect ray
+      water_tint = vec3(.78, .85, .8); // Make water greener and darker
+    } else { // Not underwater - march
+      distance = p.y-terrain_height(p.xz); // Real distance is hard to calculate so use p's
+                                   // height above the terrain, and since that's obviously
+      ray_length += distance * .6; // wrong - only march .6 of the way and hope for the best.
+    }
+    if(ray_length > 20.) break; // We are far away (in the sky)
+  }
+  vec2 h = vec2(.0001, 0); // From https://iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
+  vec3 surface_normal = normalize(vec3(terrain_height(p.xz-h.xy) - terrain_height(p.xz+h.xy),
+                               2.*h.x, terrain_height(p.xz-h.yx) - terrain_height(p.xz+h.yx)));
+  vec3 terrain_color = vec3(.9, .7, .6) * (surface_normal.z * .5 + .5); // Terrain, backlit
+  vec3 sky_color = mix(vec3(1.2,1.,.9),vec3(.4,.5,.6),abs(ray_direction.y)); // Sunny horizon
+  if(ray_length > 20.) { // Reuse terrain_height() FBM to paint some clouds
+    vec2 cloud_uv = ray_direction.xz / ray_direction.y + time;
+    sky_color *= 1. - min(0., terrain_height(cloud_uv) * ray_direction.y);
+  }
+  vec3 color = mix(terrain_color, sky_color, min(1., ray_length / 20.)); // Mountains-sky fade
+  color *= water_tint; // Water color
+  fragColor = vec4(pow(color, vec3(.4545)), 1); // Gamma correction
+}
+// --------[ Original ShaderToy ends here ]---------- //
+
+void main(void)
+{
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+// -------------------------------------------------------------------------------------------------------------------
+
+</script>
+<script src="three.min.js"></script>
+<script src="main.js"></script>
+
+</body>
+
+<!-- Mirrored from digitonaut.com/art/flight_over_isles/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 09:59:47 GMT -->
+</html>

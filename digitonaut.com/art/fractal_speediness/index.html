@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en" >
+
+<!-- Mirrored from digitonaut.com/art/fractal_speediness/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:01:06 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Fractal Speediness</title>
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<script src="88_three.min.js"></script>
+<script id="vertexShader" type="x-shader/x-vertex">
+    void main() {
+        gl_Position = vec4( position, 1.0 );
+    }
+</script>
+<script id="fragmentShader" type="x-shader/x-fragment">
+  uniform vec2 u_resolution;
+  uniform float u_time;
+  uniform vec2 u_mouse;
+  uniform sampler2D u_noise;
+  uniform sampler2D u_tex_wormhole;
+  uniform sampler2D u_tex_wall;
+
+  const int octaves = 2;
+  const float seed = 43758.5453123;
+  const float seed2 = 73156.8473192;
+  // Epsilon value
+  const float eps = 0.005;
+
+  const float speed = 8.;
+
+  // movement variables
+  vec3 movement = vec3(.0);
+  vec2 uv;
+
+  // Gloable variables for the raymarching algorithm.
+  const int maxIterations = 256;
+  const int maxIterationsShad = 16;
+  const float stepScale = .95;
+  const float stopThreshold = 0.0005;
+  const float clipNear = 0.0;
+  const float clipFar = 32.0;
+  
+  #define PI 3.14159265359
+  #define TAU 6.28318530718
+  
+  // Camera path.
+  vec3 camPath(float t){
+    
+      return vec3(sin(t/10.)*5., cos(t/10.)*5., t);    
+  }
+  
+  mat4 rotationMatrix(vec3 axis, float angle)
+  {
+      axis = normalize(axis);
+      float s = sin(angle);
+      float c = cos(angle);
+      float oc = 1.0 - c;
+
+      return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
+                  oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
+                  oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
+                  0.0,                                0.0,                                0.0,                                1.0);
+  }
+  
+  
+  float length2( vec2 p )
+  {
+    return sqrt( p.x*p.x + p.y*p.y );
+  }
+
+  float length6( vec2 p )
+  {
+    p = p*p*p; p = p*p;
+    return pow( p.x + p.y, 1.0/6.0 );
+  }
+
+  float length8( vec2 p )
+  {
+    p = p*p; p = p*p; p = p*p;
+    return pow( p.x + p.y, 1.0/8.0 );
+  }
+  
+  float sdSphere( vec3 p, float s )
+  {
+    return length(p)-s;
+  }
+  // smooth min
+  // reference: http://iquilezles.org/www/articles/smin/smin.htm
+  float smin(float a, float b, float k) {
+      float res = exp(-k*a) + exp(-k*b);
+      return -log(res)/k;
+  }
+  
+  vec3 random3( vec3 p ) {
+      return fract(sin(vec3(dot(p,vec3(127.1,311.7,319.8)),dot(p,vec3(269.5,183.3, 415.2)),dot(p,vec3(362.9,201.5,134.7))))*43758.5453);
+  }
+  vec2 random2( vec2 p ) {
+      return fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
+  }
+  
+  // The world!
+  float world_sdf(in vec3 p, inout int objid) {
+    float world = 10.;
+    
+    vec3 _path = camPath(p.z + 1.);
+    
+    p.xy -= _path.xy; // incrementing Z by one basically just keeps the camera in the centre of the tunnel.
+    
+    vec2 polar = vec2(atan(p.y, p.x), length(p.xy));
+    
+    world = .5 - polar.y;
+    objid = 1;
+    
+    p = mod((vec4(p * vec3(1.5, 1.5, .1), 1.) * rotationMatrix(vec3(0., 0., 1.), u_time)).xyz, 1.0) - .5;
+    
+    float sphere = sdSphere(p, .05);
+    if(sphere < world) {
+      world = sphere;
+      objid = 0;
+    }
+    
+    return world;
+  }
+  float world_sdf(in vec3 p) {
+    int objid;
+    return world_sdf(p, objid);
+  }
+  
+  // Fuck yeah, normals!
+  vec3 calculate_normal(in vec3 p)
+  {
+    const vec3 small_step = vec3(0.0001, 0.0, 0.0);
+    
+    float gradient_x = world_sdf(vec3(p.x + eps, p.y, p.z)) - world_sdf(vec3(p.x - eps, p.y, p.z));
+    float gradient_y = world_sdf(vec3(p.x, p.y + eps, p.z)) - world_sdf(vec3(p.x, p.y - eps, p.z));
+    float gradient_z = world_sdf(vec3(p.x, p.y, p.z  + eps)) - world_sdf(vec3(p.x, p.y, p.z - eps));
+    
+    vec3 normal = vec3(gradient_x, gradient_y, gradient_z);
+
+    return normalize(normal);
+  }
+
+  // Raymarching.
+  float rayMarching( vec3 origin, vec3 dir, float start, float end, inout float field, inout int objid ) {
+    
+    float sceneDist = 1e4;
+    float rayDepth = start;
+    for ( int i = 0; i < maxIterations; i++ ) {
+      sceneDist = world_sdf( origin + dir * rayDepth, objid ); // Distance from the point along the ray to the nearest surface point in the scene.
+
+      if (( sceneDist < stopThreshold ) || (rayDepth >= end)) {        
+        break;
+      }
+      // We haven't hit anything, so increase the depth by a scaled factor of the minimum scene distance.
+      rayDepth += sceneDist * stepScale;
+    }
+  
+    if ( sceneDist >= stopThreshold ) rayDepth = end;
+    else rayDepth += sceneDist;
+      
+    // We've used up our maximum iterations. Return the maximum distance.
+    return rayDepth;
+  }
+
+
+  // Random noise value, by IQ.
+  float hash( float n ) {
+    return fract(sin(n)*43758.5453);
+  }
+  
+  /**
+   * Lighting
+   * This stuff is way way better than the model I was using.
+   * Courtesy Shane Warne
+   * Reference: http://raymarching.com/
+   * -------------------------------------
+   * */
+  
+  // Lighting.
+  vec3 lighting( vec3 sp, vec3 camPos, int reflectionPass, float dist, float field, vec3 rd, int objid) {
+    
+    // Start with black.
+    vec3 sceneColor = vec3(0.0);
+
+    vec3 objColor = vec3(-1.);
+    
+    // Obtain the surface normal at the scene position "sp."
+    vec3 surfNormal = calculate_normal(sp);
+    
+    if(objid == 1) {
+      ;
+      float ang = atan(surfNormal.y, surfNormal.x);
+      vec4 noise = texture2D(u_noise, vec2(ang * .1, sp.z * .5) * 1., -100.);
+      float spike_mod = sin(ang * 200. + sin(u_time) * 100.) + noise.x;
+      float spikes_1 = clamp(spike_mod, 0., 1.);
+      objColor = texture2D(u_tex_wormhole, vec2(ang, sp.z * .1)).xyz;
+      objColor *= sin(sp.z * 1.8);
+      
+      float spikes = clamp(spikes_1 - objColor.b * 2. + .5, 0., 1.);
+      objColor -= vec3(spikes) * .2;
+      vec3 tex1 = texture2D(u_tex_wall, vec2(ang, sp.z * 1.) * .5).grb;
+      objColor += clamp(tex1 * tex1 * tex1 * tex1, -1., 1.) * sin(sp.z * 2.8);
+      objColor = clamp(objColor, 0., 1.);
+      objColor.g = smoothstep(0., .7, objColor.g);
+      
+      // This makes the tunnel a checkerboard. Good for testing UVs
+      // vec2 uv = vec2(ang * .3 * TAU, sp.z);
+      // vec2 id = floor(uv);
+      // objColor += vec3( mod(id.x + id.y, 2.) ) * .1;
+    }
+
+    // Lighting.
+
+    // lp - Light position. Keeping it in the vacinity of the camera, but away from the objects in the scene.
+    vec3 lp = vec3(0., 0.0, 1.0) + movement;
+    // ld - Light direction.
+    vec3 ld = lp-sp;
+    // lcolor - Light color.
+    vec3 lcolor = vec3(1.,0.97,0.92) * .8;
+    
+     // Light falloff (attenuation).
+    float len = length( ld ); // Distance from the light to the surface point.
+    ld /= len; // Normalizing the light-to-surface, aka light-direction, vector.
+    float lightAtten = min( 1.0 / ( 0.15*len*len ), 1.0 ); // Removed light attenuation for this because I want the fade to white
+    
+    float sceneLen = length(camPos - sp); // Distance of the camera to the surface point
+    float sceneAtten = min( 1.0 / ( 0.015*sceneLen*sceneLen ), 1.0 ); // Keeps things between 0 and 1.   
+
+    // Obtain the reflected vector at the scene position "sp."
+    vec3 ref = reflect(-ld, surfNormal);
+    
+    float ao = 1.0; // Ambient occlusion.
+    // ao = calculateAO(sp, surfNormal); // Ambient occlusion.
+
+    float ambient = 1.5; //The object's ambient property.
+    float specularPower = 200000.; // The power of the specularity. Higher numbers can give the object a harder, shinier look.
+    float diffuse = max( 0.0, dot(surfNormal, ld) ); //The object's diffuse value.
+    float specular = max( 0.0, dot( ref, normalize(camPos-sp)) ); //The object's specular value.
+    specular = pow(specular, specularPower); // Ramping up the specular value to the specular power for a bit of shininess.
+    	
+    // Bringing all the lighting components togethr to color the screen pixel.
+    sceneColor += (objColor*(diffuse*0.8+ambient)+specular*0.5)*lcolor*1.3*lightAtten;
+    // sceneColor = mix(sceneColor, vec3(0.), 1.-sceneAtten*sceneAtten); // fog
+    
+    return sceneColor;
+
+  }
+  
+    void main() {
+      
+      // Setting up our screen coordinates.
+      vec2 aspect = vec2(u_resolution.x/u_resolution.y, 1.0); //
+      uv = (2.0*gl_FragCoord.xy/u_resolution.xy - 1.0)*aspect;
+      
+      // This just gives us a touch of fisheye
+      // uv *= 1. + dot(uv, uv) * 0.4;
+      
+      // movement
+      movement = camPath(u_time * speed);
+      
+      // The sin in here is to make it look like a walk.
+      vec3 lookAt = vec3(-0., 0., 0.);  // This is the point you look towards, or at, if you prefer.
+      vec3 camera_position = vec3(0., 0., -1.0);
+      
+      lookAt += camPath(u_time * speed + 3.);
+      camera_position += movement;
+      
+      vec3 forward = normalize(lookAt-camera_position); // Forward vector.
+      vec3 right = normalize(vec3(forward.z, 0., -forward.x )); // Right vector... or is it left? Either way, so long as the correct-facing up-vector is produced.
+      vec3 up = normalize(cross(forward,right)); // Cross product the two vectors above to get the up vector.
+
+      // FOV - Field of view.
+      float FOV = 2.0;
+
+      // ro - Ray origin.
+      vec3 ro = camera_position; 
+      // rd - Ray direction.
+      vec3 rd = normalize(forward + FOV*uv.x*right + FOV*uv.y*up);
+      
+      // Ray marching.
+      int objid = 0;
+      float field = 0.;
+      float dist = rayMarching(ro, rd, clipNear, clipFar, field, objid );
+      if ( dist >= clipFar ) {
+        gl_FragColor = vec4(vec3(0.), 1.0);
+        return;
+      }
+
+      // sp - Surface position. If we've made it this far, we've hit something.
+      vec3 sp = ro + rd*dist;
+
+      // Light the pixel that corresponds to the surface position. The last entry indicates that it's not a reflection pass
+      // which we're not up to yet.
+      vec3 sceneColor = lighting( sp, camera_position, 0, dist, field, rd, objid);
+
+      // Adding the starfield
+      vec3 uv3 = normalize(vec3(uv, 0.05)) * 30.0 + vec3(0.0, 0.0, u_time * 10.);
+      vec3 i = floor(uv3);
+      vec3 f = fract(uv3);
+      vec3 star_loc = fract(cross(i, random3(i)));
+      float star = max(0.0, 20.0 * (0.1 - distance(f, star_loc))) * length(uv);
+      
+      // Clamping the lit pixel, then put it on the screen.
+      gl_FragColor = vec4(clamp(sceneColor, 0.0, 1.0) + star, 1.0);
+
+    }
+</script>
+
+
+<div id="container" touch-action="none"></div>
+<!-- partial -->
+  <script  src="script.js"></script>
+
+</body>
+
+<!-- Mirrored from digitonaut.com/art/fractal_speediness/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:01:08 GMT -->
+</html>

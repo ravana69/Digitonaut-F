@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en" >
+
+<!-- Mirrored from digitonaut.com/art/forever/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:13 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+<meta charset='utf-8'\>
+<meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Forever</title>
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<canvas id="webgl" width="500" height="1758"></canvas>
+
+<script id="vertexShader" type="x-shader/x-vertex">
+  attribute vec4 a_position;
+  
+  uniform mat4 u_modelViewMatrix;
+  uniform mat4 u_projectionMatrix;
+  
+  void main() {
+    gl_Position = a_position;
+  }
+</script>
+<script id="fragmentShader" type="x-shader/x-fragment">
+ precision highp float;
+  precision highp int;
+  
+  uniform vec2 u_resolution;
+  uniform vec2 u_mouse;
+  uniform float u_time;
+  uniform sampler2D u_noise;
+  
+  // movement variables
+  vec3 movement = vec3(.0);
+  
+  const int maxIterations = 256;
+  const int maxIterationsShad = 8;
+  const float stopThreshold = 0.001;
+  const float stepScale = .7;
+  const float eps = 0.005;
+  const vec3 clipColour = vec3(0.);
+  const vec3 fogColour = vec3(0.);
+  
+  const vec3 light1_position = vec3(0, 1., -1.);
+  const vec3 light1_colour = vec3(.8, .8, .85);
+  
+  struct Surface {
+    int object_id;
+    float distance;
+    vec3 position;
+    vec3 colour;
+    float ambient;
+    float spec;
+    vec3 norm;
+  };
+  
+  // This function describes the world in distances from any given 3 dimensional point in space
+  float world(in vec3 position, inout int object_id) {
+    float z = position.z * .5;
+    float s = sin(z);
+    float c = cos(z);
+    position.xy *= mat2(c, -s, s, c);
+    vec3 pos = floor(position * .5);
+    object_id = int(floor(pos.x + pos.y + pos.z));
+    position = mod(position, 1.) - .5;
+    return length(position) - .3;
+  }
+  float world(in vec3 position) {
+    int dummy = 0;
+    return world(position, dummy);
+  }
+  
+  vec3 getObjectColour(int object_id) {
+    float modid = mod(float(object_id), 5.);
+    if(modid == 0.) {
+      return vec3(.0, 0., 0.5);
+    } else if(modid == 1.) {
+      return vec3(.5, 0.3, 0.);
+    } else if(modid == 2.) {
+      return vec3(.5, 0.5, 0.5);
+    } else if(modid == 3.) {
+      return vec3(.0, 0.5, 0.5);
+    } else if(modid == 4.) {
+      return vec3(.0, 0.5, 0.);
+    }
+    return vec3(.5, 0., 0.);
+  }
+  
+  Surface getSurface(int object_id, float rayDepth, vec3 sp, vec3 norm) {
+    return Surface(
+      object_id, 
+      rayDepth, 
+      sp, 
+      getObjectColour(object_id), 
+      .5, 
+      2.,
+      norm);
+  }
+  
+  // The raymarch loop
+  Surface rayMarch(vec3 ro, vec3 rd, float start, float end) {
+    float sceneDist = 1e4;
+    float rayDepth = start;
+    int object_id = 0;
+    for(int i = 0; i < maxIterations; i++) {
+      sceneDist = world(ro + rd * rayDepth, object_id);
+      
+      if(sceneDist < stopThreshold || rayDepth > end) {
+        break;
+      }
+      
+      rayDepth += sceneDist * stepScale;
+    }
+    
+    return getSurface(object_id, rayDepth, ro + rd * rayDepth, vec3(0.));
+  }
+  
+  
+  
+
+  const vec3 voxelSize = vec3(0.1);
+  vec3 toVoxel(vec3 i)
+  {
+    return floor(i/voxelSize);
+  }
+  vec3 toWorld(vec3 i)
+  {
+    return i*voxelSize;	
+  }
+
+  vec3 voxelTrace(vec3 ro, vec3 rd, out bool hit, out vec3 hitNormal, out float rayDepth, out float steps)
+  {
+    const int maxSteps = 256;
+    const float isoValue = 0.0;
+
+    vec3 voxel = toVoxel(ro);
+    vec3 step = sign(rd);
+
+    vec3 nearestV = voxel + vec3(rd.x > 0.0, rd.y > 0.0, rd.z > 0.0);
+    vec3 max = (toWorld(nearestV) - ro) / rd;
+    vec3 vDelta = voxelSize / abs(rd);
+
+    vec3 hitVoxel = voxel;
+
+    hit = false;
+    float hitT = 0.0;
+    for(int i=0; i<maxSteps; i++) {
+      float d = world(toWorld(voxel));        
+      if (d <= isoValue && !hit) {
+        hit = true;
+        hitVoxel = voxel;
+        break;
+      }
+
+      if (max.x < max.y && max.x < max.z) { 
+        voxel.x += step.x;
+        max.x += vDelta.x;
+        hitNormal = vec3(-step.x, 0.0, 0.0);
+        hitT = max.x;
+      } else if (max.y < max.z) {
+        voxel.y += step.y;
+        max.y += vDelta.y;
+        hitNormal = vec3(0.0, -step.y, 0.0);		
+        hitT = max.y;
+      } else {
+        voxel.z += step.z;
+        max.z += vDelta.z;
+        hitNormal = vec3(0.0, 0.0, -step.z);		
+        hitT = max.z;
+      }
+
+      steps += 1.;
+    }
+
+
+    vec3 pos = ro + hitT*rd;
+    rayDepth = length(ro - pos);
+
+      // return voxelToWorld(hitVoxel);  
+    return pos;
+  }
+  
+  // Shadows
+  // Reference at: http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+  float softShadow(vec3 ro, vec3 lp, float k){
+
+      vec3 rd = (lp-ro); // Unnormalized direction ray.
+
+      float shade = 1.0;
+      float dist = 0.05;    
+      float end = max(length(rd), 0.001);
+
+      rd /= end;
+
+      for (int i=0; i<maxIterationsShad; i++){
+
+          float h = world(ro + rd*dist);
+          shade = min(shade, k*h/dist);
+          dist += clamp(h, 0.01, 0.5);
+
+          if (h<0.001 || dist > end) break; 
+      }
+
+      return shade;
+  }
+  
+  // ambient occlusion approximation
+  float ambientOcclusion(vec3 p, vec3 n)
+  {
+    const int steps = 3;
+    const float delta = 0.1;
+
+    float a = 0.0;
+    float weight = 1.0;
+    for(int i=1; i<=steps; i++) {
+        float d = (float(i) / float(steps)) * delta; 
+        a += weight*(d - world(p + n*d));
+        weight *= 0.5;
+    }
+    return clamp(a + .5, 0.0, 1.0);
+  }
+  
+  // Calculated the normal of any given point in space. Intended to be cast from the point of a surface
+  vec3 calculate_normal(in vec3 position) {
+    vec3 grad = vec3(
+      world(vec3(position.x + eps, position.y, position.z)) - world(vec3(position.x - eps, position.y, position.z)),
+      world(vec3(position.x, position.y + eps, position.z)) - world(vec3(position.x, position.y - eps, position.z)),
+      world(vec3(position.x, position.y, position.z + eps)) - world(vec3(position.x, position.y, position.z - eps))
+    );
+    
+    return normalize(grad);
+  }
+  
+  vec3 lighting(Surface surface_object, vec3 cam) {
+    
+    // start with black
+    vec3 sceneColour = vec3(0);
+    
+    // Surface normal
+    vec3 normal;
+    if(length(surface_object.norm) > 0.) {
+      normal = surface_object.norm;
+    } else {
+      normal = calculate_normal(surface_object.position);
+    }
+    
+    // Light position
+    vec3 lp = cam;
+    // Light direction
+    vec3 ld = lp - surface_object.position;
+    
+    // light attenuation
+    // For brightly lit scenes or global illumination (like sunlit), this can be limited to just normalizing the ld
+    float len = length( ld );
+    ld = normalize(ld);
+    float lightAtten = min( 1.0 / ( 0.15*len ), 1.0 );
+    lightAtten = 1.;
+    
+    // Scene values, mainly for fog
+    float sceneLength = length(cam - surface_object.position);
+    float sceneAttenuation = min( 1. / ( 0.15 * sceneLength * sceneLength ), 1. );
+    
+    // The surface's light reflection normal
+    vec3 reflection_normal = reflect(-ld, normal);
+    
+    // Ambient Occlusion
+    float ao = ambientOcclusion(surface_object.position, surface_object.norm);
+    // ao*=ao*1.5;
+    
+    // shadows
+    float shadows = softShadow(surface_object.position, lp, 3.);
+    
+    // Object surface properties
+    float diffuse = max(0., dot(normal, ld));
+    float specular = max(0., dot( reflection_normal, normalize(cam - surface_object.position) ));
+    
+    // Bringing all of the lighting components together
+    sceneColour += ( surface_object.colour * (diffuse + surface_object.ambient) + specular ) * light1_colour * lightAtten * ao;
+    // adding fog
+    sceneColour = mix( sceneColour, fogColour, 1. - sceneAttenuation );
+    
+    // return vec3(ao);
+    return sceneColour;
+  }
+  
+  vec3 path(float z) {
+    return vec3(0,0,-100.+z);
+  }
+
+  void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / min(u_resolution.y, u_resolution.x);
+    
+    // movement
+    movement = path(u_time);
+    
+    // Camera and look-at
+    vec3 cam = vec3(0,0,-1);
+    vec3 lookAt = vec3(.2,.2,0);
+    
+    // add movement
+    lookAt += movement;
+    cam += movement;
+    
+    // Unit vectors
+    vec3 forward = normalize(lookAt - cam);
+    vec3 right = normalize(vec3(forward.z, 0., -forward.x));
+    vec3 up = normalize(cross(forward, right));
+    
+    // FOV
+    float FOV = .9;
+    
+    // Ray origin and ray direction
+    vec3 ro = cam;
+    vec3 rd = normalize(forward + FOV * uv.x * right + FOV * uv.y * up);
+    
+    float t = u_time * .1;
+    float s = sin(t);
+    float c = cos(t);
+    rd.xy *= mat2(c, -s, s, c);
+    
+    bool hit = false;
+    vec3 norm = vec3(0.);
+    float rayDepth = 0.;
+    float steps = 0.;
+    
+    const float clipNear = 0.;
+    const float clipFar = 32.;
+    
+    vec3 surfacePos = voxelTrace(ro, rd, hit, norm, rayDepth, steps);
+    Surface objectSurface = getSurface(1, rayDepth, surfacePos, norm);
+    
+    // Ray marching
+    // Surface objectSurface = rayMarch(ro, rd, clipNear, clipFar);
+    // if(objectSurface.distance > clipFar) {
+    //   gl_FragColor = vec4(clipColour, 1.);
+    //   return;
+    // }
+    vec3 sceneColour = vec3(0);
+    if(hit) {
+      sceneColour = lighting(objectSurface, cam);
+    }
+    // sceneColour = vec3(rayDepth*.03);
+    // sceneColour *= vec3(1./(steps*.1));
+    // vec3 sceneColour = norm;
+    
+    gl_FragColor = vec4(sceneColour, 1.);
+  }
+  
+</script>
+<!-- partial -->
+  <script  src="script.js"></script>
+
+</body>
+
+<!-- Mirrored from digitonaut.com/art/forever/ by HTTrack Website Copier/3.x [XR&CO'2014], Thu, 16 Feb 2023 10:00:14 GMT -->
+</html>
